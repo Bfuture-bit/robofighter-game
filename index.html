@@ -704,8 +704,8 @@ function makeIR(ctx, seconds){
     let lp = 0;
     for(let i=0;i<n;i++){
       const t = i/rate;
-      const env = Math.exp(-t*(1.18 + c*0.16));
-      const bright = Math.exp(-t*3.6);
+      const env = Math.exp(-t*(0.95 + c*0.12));
+      const bright = Math.exp(-t*4.4);
       let noise = (Math.random()*2-1);
       if(i < rate*0.22 && Math.random() < 0.01) noise += (Math.random()*2-1)*0.8;
       const raw = noise * (0.2 + 0.8*bright) * env * 0.42;
@@ -743,7 +743,7 @@ function addVoice(ctx, dest, base, pan, partials, level){
     o.start();
     oscs.push({ o, g, p, base });
   }
-  return { out, oscs, base };
+  return { out, oscs, base, level };
 }
 
 function fadeMaster(){
@@ -777,36 +777,36 @@ function setupAudio(ctx){
   master.connect(ctx.destination);
 
   const hp = ctx.createBiquadFilter();
-  hp.type = 'highpass'; hp.frequency.value = 90; hp.Q.value = 0.6;
+  hp.type = 'highpass'; hp.frequency.value = 80; hp.Q.value = 0.5;
   const lp = ctx.createBiquadFilter();
-  lp.type = 'lowpass'; lp.frequency.value = 3600; lp.Q.value = 0.5;
+  lp.type = 'lowpass'; lp.frequency.value = 1700; lp.Q.value = 0.45;
   const shelf = ctx.createBiquadFilter();
-  shelf.type = 'highshelf'; shelf.frequency.value = 4200; shelf.gain.value = -8;
+  shelf.type = 'highshelf'; shelf.frequency.value = 2400; shelf.gain.value = -12;
 
   const bus = ctx.createGain();
   bus.gain.value = 1;
   bus.connect(hp).connect(lp).connect(shelf);
 
   const dry = ctx.createGain();
-  dry.gain.value = 0.9;
+  dry.gain.value = 0.78;
   shelf.connect(dry).connect(master);
 
   let wetG = { gain: { value: 0, setTargetAtTime(){} } };
   try{
     const conv = ctx.createConvolver();
-    conv.buffer = makeIR(ctx, 5.8);
+    conv.buffer = makeIR(ctx, 7.2);
     wetG = ctx.createGain();
-    wetG.gain.value = 0.3;
+    wetG.gain.value = 0.4;
     shelf.connect(conv).connect(wetG).connect(master);
   }catch(e){}
 
   let delayMix = { gain: { value: 0, setTargetAtTime(){} } };
   try{
-    const delayL = ctx.createDelay(1.2); delayL.delayTime.value = 0.31;
-    const delayR = ctx.createDelay(1.2); delayR.delayTime.value = 0.47;
-    const fbL = ctx.createGain(); fbL.gain.value = 0.18;
-    const fbR = ctx.createGain(); fbR.gain.value = 0.14;
-    delayMix = ctx.createGain(); delayMix.gain.value = 0.1;
+    const delayL = ctx.createDelay(1.6); delayL.delayTime.value = 0.73;
+    const delayR = ctx.createDelay(1.6); delayR.delayTime.value = 1.07;
+    const fbL = ctx.createGain(); fbL.gain.value = 0.12;
+    const fbR = ctx.createGain(); fbR.gain.value = 0.1;
+    delayMix = ctx.createGain(); delayMix.gain.value = 0.05;
     const merger = ctx.createChannelMerger(2);
     shelf.connect(delayMix);
     delayMix.connect(delayL); delayMix.connect(delayR);
@@ -817,18 +817,15 @@ function setupAudio(ctx){
     merger.connect(master);
   }catch(e){}
 
-  const PHI = 1.61803398875;
-  const base = 174.61;
   const partials = [
     { r: 1, g: 1.0 },
-    { r: PHI, g: 0.18 },
-    { r: PHI*PHI, g: 0.07 },
-    { r: 1/PHI, g: 0.09 },
-    { r: PHI*PHI*PHI, g: 0.02 }
+    { r: 2.0018, g: 0.12 },
+    { r: 3.0024, g: 0.045 },
+    { r: 5.003, g: 0.014 }
   ];
-  const v1 = addVoice(ctx, bus, base, -0.28, partials, 0.085);
-  const v2 = addVoice(ctx, bus, base*PHI, 0.34, partials.map(p => ({ r: p.r, g: p.g*0.82 })), 0.07);
-  const v3 = addVoice(ctx, bus, base*Math.sqrt(PHI), 0.06, partials.map(p => ({ r: p.r, g: p.g*0.7 })), 0.055);
+  const v1 = addVoice(ctx, bus, 146.83, -0.22, partials, 0.078);
+  const v2 = addVoice(ctx, bus, 220.00, 0.26, partials.map(p => ({ r: p.r, g: p.g*0.78 })), 0.062);
+  const v3 = addVoice(ctx, bus, 174.61, 0.04, partials.map(p => ({ r: p.r, g: p.g*0.62 })), 0.048);
 
   const nLen = Math.floor(ctx.sampleRate*2);
   const nb = ctx.createBuffer(1, nLen, ctx.sampleRate);
@@ -836,10 +833,10 @@ function setupAudio(ctx){
   for(let i=0;i<nLen;i++) nd[i] = Math.random()*2-1;
   const noise = ctx.createBufferSource();
   noise.buffer = nb; noise.loop = true;
-  const nbp = ctx.createBiquadFilter();
-  nbp.type = 'bandpass'; nbp.frequency.value = 1100; nbp.Q.value = 1.4;
-  const ng = ctx.createGain(); ng.gain.value = 0.012;
-  noise.connect(nbp).connect(ng).connect(bus);
+  const nlp = ctx.createBiquadFilter();
+  nlp.type = 'lowpass'; nlp.frequency.value = 640; nlp.Q.value = 0.4;
+  const ng = ctx.createGain(); ng.gain.value = 0.016;
+  noise.connect(nlp).connect(ng).connect(bus);
   noise.start();
 
   const eventBus = ctx.createGain();
@@ -851,10 +848,10 @@ function setupAudio(ctx){
   audio.lp = lp;
   audio.wet = wetG;
   audio.delayMix = delayMix;
-  audio.noiseF = nbp;
+  audio.noiseF = nlp;
   audio.noiseG = ng;
   audio.eventBus = eventBus;
-  audio.spectrumG = [v1, v2, v3].map(v => v.oscs[4].g);
+  audio.spectrumG = [v1, v2, v3].flatMap(v => [v.oscs[2].g, v.oscs[3].g]);
 
   fadeMaster();
 }
@@ -876,51 +873,52 @@ function bootAudio(){
 function unfoldSound(th, strength, nested){
   const ctx = audio.ctx;
   if(!ctx || !audio.eventBus) return;
-  if(tChapter - lastSoundAt < 0.18 || soundPoly > 7) return;
+  if(tChapter - lastSoundAt < 0.4 || soundPoly > 3) return;
   lastSoundAt = tChapter;
   soundPoly++;
   const t = ctx.currentTime;
-  const PHI = 1.61803398875;
-  const freq = 174.61 * Math.pow(PHI, (th/TAU) % 1 * 0.7);
-  const pan = Math.sin(th) * 0.72;
+  const fund = (th % TAU) < Math.PI ? 146.83 : 220.00;
+  const pan = Math.sin(th) * 0.45;
   const g = ctx.createGain();
-  const peak = 0.07 * strength * (nested ? 1.12 : 1);
-  g.gain.setValueAtTime(0.001, t);
-  g.gain.linearRampToValueAtTime(peak, t+0.12);
-  g.gain.linearRampToValueAtTime(0.0001, t+2.6);
+  const peak = 0.036 * strength * (nested ? 1.08 : 1);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(peak, t + 0.95);
+  g.gain.linearRampToValueAtTime(0.0001, t + 5.4);
   const pn = connectPan(ctx, g, audio.eventBus, pan);
   if(pn && pn.pan){
     pn.pan.setValueAtTime(pan, t);
-    pn.pan.linearRampToValueAtTime(pan*-0.28, t+2.0);
+    pn.pan.linearRampToValueAtTime(pan * -0.18, t + 3.6);
   }
-  const ratios = [1, PHI, PHI*PHI, PHI*PHI*PHI];
-  const gains = [1, 0.18, 0.07, 0.03 + spectrumOpen*0.06];
+  const ratios = [1, 2.0016, 3.002];
+  const gains = [1, 0.1, 0.032];
   let ended = 0;
-  const done = () => { ended++; if(ended>=4) soundPoly = Math.max(0, soundPoly-1); };
+  const done = () => { ended++; if(ended>=3) soundPoly = Math.max(0, soundPoly-1); };
   ratios.forEach((r,i) => {
     const o = ctx.createOscillator();
     o.type = 'sine';
-    o.frequency.value = freq * r * (1 + (i-1.5)*0.001);
+    o.frequency.value = fund * r;
     const pg = ctx.createGain();
-    pg.gain.value = gains[i] * (i>1 ? 0.4 + spectrumOpen*1.1 : 1);
+    pg.gain.value = gains[i];
     o.connect(pg).connect(g);
     o.onended = done;
     o.start(t);
-    o.stop(t+2.7);
+    o.stop(t + 5.6);
   });
-  const nLen = Math.floor(ctx.sampleRate*0.4);
+  const nLen = Math.floor(ctx.sampleRate * 1.2);
   const nb = ctx.createBuffer(1, nLen, ctx.sampleRate);
   const nd = nb.getChannelData(0);
-  for(let i=0;i<nLen;i++) nd[i] = (Math.random()*2-1) * Math.exp(-i/nLen*3.2);
+  for(let i=0;i<nLen;i++) nd[i] = (Math.random()*2-1) * Math.exp(-i/nLen*1.6);
   const src = ctx.createBufferSource(); src.buffer = nb;
-  const bp = ctx.createBiquadFilter();
-  bp.type = 'bandpass'; bp.frequency.value = freq*PHI; bp.Q.value = 2.2;
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 680; lp.Q.value = 0.32;
   const ng = ctx.createGain();
-  ng.gain.setValueAtTime(0.001, t);
-  ng.gain.linearRampToValueAtTime(0.04*strength, t+0.05);
-  ng.gain.linearRampToValueAtTime(0.0001, t+1.1);
-  src.connect(bp).connect(ng).connect(g);
+  ng.gain.setValueAtTime(0.0001, t);
+  ng.gain.linearRampToValueAtTime(0.02 * strength, t + 0.6);
+  ng.gain.linearRampToValueAtTime(0.0001, t + 3.0);
+  src.connect(lp).connect(ng).connect(g);
   src.start(t);
+  if(audio.lp && audio.lp.frequency) audio.lp.frequency.setTargetAtTime(2300, t, 0.2);
+  if(audio.wet && audio.wet.gain && audio.wet.gain.setTargetAtTime) audio.wet.gain.setTargetAtTime(0.5, t, 0.25);
 }
 
 function tickAudio(dt, t){
@@ -928,19 +926,20 @@ function tickAudio(dt, t){
   if(audio.ctx.state !== 'running') audio.ctx.resume();
   const L1 = uLife.value, L2 = uLife2.value, L3 = uLife3.value;
   const now = audio.ctx.currentTime;
-  if(audio.lp && audio.lp.frequency) audio.lp.frequency.setTargetAtTime(2400 + 1400*L1 + 800*spectrumOpen, now, 0.08);
-  if(audio.wet && audio.wet.gain && audio.wet.gain.setTargetAtTime) audio.wet.gain.setTargetAtTime(0.26 + 0.12*L2 + 0.1*spectrumOpen, now, 0.12);
-  if(audio.delayMix && audio.delayMix.gain && audio.delayMix.gain.setTargetAtTime) audio.delayMix.gain.setTargetAtTime(0.08 + 0.09*L3 + 0.05*spectrumOpen, now, 0.12);
-  if(audio.noiseF) audio.noiseF.frequency.setTargetAtTime(800 + 600*L2 + 350*Math.sin(t*0.11), now, 0.1);
-  if(audio.noiseG) audio.noiseG.gain.setTargetAtTime(0.008 + 0.008*L1, now, 0.1);
-  const drift = 1 + 0.006*Math.sin(0.023*t) + 0.0035*Math.sin(0.011*t+1.3);
+  if(audio.lp && audio.lp.frequency) audio.lp.frequency.setTargetAtTime(1500 + 850*L1 + 650*spectrumOpen, now, 0.28);
+  if(audio.wet && audio.wet.gain && audio.wet.gain.setTargetAtTime) audio.wet.gain.setTargetAtTime(0.36 + 0.1*L2 + 0.12*spectrumOpen, now, 0.22);
+  if(audio.delayMix && audio.delayMix.gain && audio.delayMix.gain.setTargetAtTime) audio.delayMix.gain.setTargetAtTime(0.04 + 0.04*L3 + 0.03*spectrumOpen, now, 0.22);
+  if(audio.noiseF) audio.noiseF.frequency.setTargetAtTime(460 + 200*L2, now, 0.18);
+  if(audio.noiseG) audio.noiseG.gain.setTargetAtTime(0.012 + 0.01*L1, now, 0.18);
+  const drift = 1 + 0.0028*Math.sin(0.017*t) + 0.0018*Math.sin(0.008*t+1.3);
   for(const v of audio.voices){
+    const breath = 0.93 + 0.07*Math.sin(t*0.06 + v.base*0.008);
+    if(v.out && v.out.gain) v.out.gain.setTargetAtTime((v.level || 0.06) * breath, now, 0.45);
     for(const os of v.oscs){
-      os.o.frequency.setTargetAtTime(v.base * os.p.r * drift, now, 0.2);
+      os.o.frequency.setTargetAtTime(v.base * os.p.r * drift, now, 0.4);
+      const open = os.p.r > 2.5 ? (1 + spectrumOpen * 1.6) : 1;
+      os.g.gain.setTargetAtTime(os.p.g * open, now, 0.28);
     }
-  }
-  for(const g of audio.spectrumG){
-    g.gain.setTargetAtTime(0.02 + spectrumOpen*0.1, now, 0.15);
   }
 }
 
