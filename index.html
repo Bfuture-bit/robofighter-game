@@ -67,7 +67,7 @@ canvas{display:block;width:100%;height:100%}
 
   var scene = new THREE.Scene();
   var camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.12, 220);
-  camera.position.set(3.2, 0.5, 8.8);
+  camera.position.set(6.6, 1.6, 10.8);
 
   var uniforms = {
     uTime: { value: 0 },
@@ -143,11 +143,11 @@ canvas{display:block;width:100%;height:100%}
     '  scar=clamp(scar,0.0,1.0);',
     '  vec4 mv=modelViewMatrix*vec4(pos,1.0);',
     '  gl_Position=projectionMatrix*mv;',
-    '  float sz=2.55*isFil+1.45*isSheet+12.5*isAtm+1.2*isSpark;',
-    '  sz*=1.0+energy*0.5+recAmt*1.35;',
-    '  sz*=180.0/max(2.2,-mv.z);',
+    '  float sz=2.15*isFil+1.15*isSheet+8.8*isAtm+1.05*isSpark;',
+    '  sz*=1.0+energy*0.22+recAmt*0.7;',
+    '  sz*=92.0/max(7.5,-mv.z);',
     '  sz*=uPixelRatio;',
-    '  gl_PointSize=clamp(sz,0.75,44.0);',
+    '  gl_PointSize=clamp(sz,0.7,isAtm>0.5?26.0:14.5);',
     '  vec3 gold=vec3(1.0,0.55,0.15);',
     '  vec3 hot=vec3(1.0,0.93,0.78);',
     '  vec3 cyan=vec3(0.60,0.90,1.0);',
@@ -161,7 +161,7 @@ canvas{display:block;width:100%;height:100%}
     '  col*=uExposure;',
     '  float fog=exp(-0.015*length(mv.xyz));',
     '  col*=fog;',
-    '  float alpha=0.62*isFil+0.28*isSheet+0.042*isAtm+0.78*isSpark;',
+    '  float alpha=0.58*isFil+0.11*isSheet+0.032*isAtm+0.72*isSpark;',
     '  alpha*=(0.52+0.48*e)*fog*uExposure;',
     '  alpha*=0.72+0.28*life;',
     '  alpha+=recAmt*0.35;',
@@ -194,11 +194,11 @@ canvas{display:block;width:100%;height:100%}
     depthTest: true
   });
 
-  var nFil = mobile ? 28 * 88 : 56 * 150;
-  var nSpark = mobile ? 1600 : 3800;
-  var nAtm = Math.floor(COUNT * (mobile ? 0.24 : 0.20));
+  var nFil = mobile ? 36 * 96 : 72 * 168;
+  var nSpark = mobile ? 1400 : 3200;
+  var nAtm = Math.floor(COUNT * (mobile ? 0.22 : 0.18));
   var nSheet = COUNT - nFil - nAtm - nSpark;
-  if (nSheet < 1000) nSheet = 1000;
+  if (nSheet < 800) nSheet = 800;
 
   var N = nFil + nSheet + nAtm + nSpark;
   var aSeed = new Float32Array(N);
@@ -212,8 +212,8 @@ canvas{display:block;width:100%;height:100%}
   var dummy = new Float32Array(N * 3);
 
   var idx = 0;
-  var nFiber = mobile ? 28 : 56;
-  var nSeg = mobile ? 88 : 150;
+  var nFiber = mobile ? 36 : 72;
+  var nSeg = mobile ? 96 : 168;
   var lanes = [0.52, 0.82, 1.12, 1.57, 1.88, 2.14, 2.38];
   for (var f = 0; f < nFiber; f++) {
     var lane = f % 7;
@@ -279,7 +279,7 @@ canvas{display:block;width:100%;height:100%}
 
   var composer = new THREE.EffectComposer(renderer);
   composer.addPass(new THREE.RenderPass(scene, camera));
-  var bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.48, 0.62, 0.38);
+  var bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.34, 0.52, 0.48);
   composer.addPass(bloom);
 
   function resize() {
@@ -297,8 +297,8 @@ canvas{display:block;width:100%;height:100%}
   resize();
 
   var KEYS = [
-    { t: 0,  p: [3.15, 0.45, 8.6],  l: [0.4, 0.05, 1.6], fov: 50 },
-    { t: 8,  p: [7.8, 2.1, 11.2],   l: [0.0, 0.2, 0.2],  fov: 42 },
+    { t: 0,  p: [6.6, 1.6, 10.8],  l: [0.0, 0.15, 0.2], fov: 46 },
+    { t: 8,  p: [9.4, 2.8, 12.6],   l: [0.0, 0.2, 0.0],  fov: 40 },
     { t: 17, p: [15.2, 6.4, 3.4],   l: [0.0, 0.1, 0.0],  fov: 35 },
     { t: 27, p: [1.2, 0.55, -3.8],  l: [2.4, 0.15, 2.2], fov: 58 },
     { t: 37, p: [-11.5, 8.2, 15.5], l: [0.0, 0.0, 0.0],  fov: 34 },
@@ -340,9 +340,9 @@ canvas{display:block;width:100%;height:100%}
     };
   }
 
-  var camP = new THREE.Vector3(3.15, 0.45, 8.6);
-  var camL = new THREE.Vector3(0.4, 0.05, 1.6);
-  var camFov = 50;
+  var camP = new THREE.Vector3(6.6, 1.6, 10.8);
+  var camL = new THREE.Vector3(0.0, 0.15, 0.2);
+  var camFov = 46;
   var look = new THREE.Vector3();
 
   var wells = [];
@@ -746,8 +746,8 @@ canvas{display:block;width:100%;height:100%}
       audio.ng.gain.setTargetAtTime(0.016 + 0.012 * breathe, ct, 0.5);
     }
 
-    bloom.strength = 0.40 + 0.12 * life + Math.min(0.22, energySmoothed * 0.08);
-    bloom.threshold = 0.40 - Math.min(0.08, energySmoothed * 0.03);
+    bloom.strength = 0.30 + 0.08 * life + Math.min(0.16, energySmoothed * 0.06);
+    bloom.threshold = 0.50 - Math.min(0.06, energySmoothed * 0.02);
 
     var goal = cameraGoal(started ? chapterT : 0);
     if (lastWell) {
