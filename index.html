@@ -131,11 +131,12 @@ canvas{display:block;width:100%;height:100%}
     '    vec3 dn=d/(dist+0.001);',
     '    acc+=cross(dn,uPull)*f*1.55;',
     '    energy+=s*2.35/dist2;',
-    '    scar+=s*smoothstep(6.2,0.7,dist)*0.48;',
-    '    float fold=s*smoothstep(4.5,0.11,dist);',
+    '    scar+=s*smoothstep(6.8,0.55,dist)*0.55;',
+    '    float fold=s*smoothstep(3.15,0.07,dist);',
     '    recAmt+=fold;',
-    '    vec3 child=hopf(eta*0.82+0.32,phi*1.62,psi*2.18+t*0.22,2.08);',
-    '    pos=mix(pos,L.xyz+child,clamp(fold*0.92,0.0,0.90));',
+    '    vec3 child=hopf(0.50+aSeed*1.62,aPhase*2.0,aPsi*3.05+t*0.31,2.72);',
+    '    float nest=clamp(fold*(0.42+0.58*isFil+0.40*isSpark),0.0,0.96);',
+    '    pos=mix(pos,L.xyz+child,nest);',
     '  }',
     '  pos+=acc*(0.32+0.22*isFil+0.12*isSpark);',
     '  energy=clamp(energy,0.0,2.4);',
@@ -143,12 +144,14 @@ canvas{display:block;width:100%;height:100%}
     '  scar=clamp(scar,0.0,1.0);',
     '  vec4 mv=modelViewMatrix*vec4(pos,1.0);',
     '  gl_Position=projectionMatrix*mv;',
+    '#ifndef IS_LINE',
     '  float sz=2.15*isFil+1.15*isSheet+8.8*isAtm+1.05*isSpark;',
     '  sz*=1.0+energy*0.22+recAmt*0.7;',
     '  sz*=92.0/max(7.5,-mv.z);',
     '  sz*=uPixelRatio;',
     '  gl_PointSize=clamp(sz,0.7,isAtm>0.5?26.0:14.5);',
-    '  vec3 gold=vec3(1.0,0.55,0.15);',
+    '#endif',
+    '  vec3 gold=mix(vec3(1.0,0.55,0.15),vec3(1.0,0.46,0.20),0.4*(1.0-life));',
     '  vec3 hot=vec3(1.0,0.93,0.78);',
     '  vec3 cyan=vec3(0.60,0.90,1.0);',
     '  vec3 copper=vec3(0.80,0.28,0.13);',
@@ -161,10 +164,16 @@ canvas{display:block;width:100%;height:100%}
     '  col*=uExposure;',
     '  float fog=exp(-0.015*length(mv.xyz));',
     '  col*=fog;',
-    '  float alpha=0.58*isFil+0.11*isSheet+0.032*isAtm+0.72*isSpark;',
+    '  float alpha=0.64*isFil+0.08*isSheet+0.030*isAtm+0.74*isSpark;',
     '  alpha*=(0.52+0.48*e)*fog*uExposure;',
     '  alpha*=0.72+0.28*life;',
-    '  alpha+=recAmt*0.35;',
+    '  alpha+=recAmt*0.42;',
+    '#ifdef IS_LINE',
+    '  alpha=0.22*fog*uExposure*(0.65+0.35*e+recAmt*0.8);',
+    '  col=mix(gold,hot,0.35+0.45*e);',
+    '  col=mix(col,cyan,recAmt*0.9);',
+    '  col*=uExposure*fog;',
+    '#endif',
     '  vColor=col;',
     '  vAlpha=clamp(alpha,0.0,1.0);',
     '}'
@@ -188,6 +197,24 @@ canvas{display:block;width:100%;height:100%}
     uniforms: uniforms,
     vertexShader: vert,
     fragmentShader: frag,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: true
+  });
+
+  var fragLine = [
+    'varying vec3 vColor;',
+    'varying float vAlpha;',
+    'void main(){',
+    '  gl_FragColor=vec4(vColor,vAlpha);',
+    '}'
+  ].join('\n');
+  var matLine = new THREE.ShaderMaterial({
+    uniforms: uniforms,
+    defines: { IS_LINE: '1' },
+    vertexShader: vert,
+    fragmentShader: fragLine,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
@@ -277,6 +304,51 @@ canvas{display:block;width:100%;height:100%}
   var points = new THREE.Points(geo, mat);
   scene.add(points);
 
+  var nLF = mobile ? 9 : 16;
+  var nLS = mobile ? 96 : 152;
+  var nLV = nLF * nLS;
+  var lSeed = new Float32Array(nLV);
+  var lPhase = new Float32Array(nLV);
+  var lEta = new Float32Array(nLV);
+  var lPhi = new Float32Array(nLV);
+  var lPsi = new Float32Array(nLV);
+  var lLane = new Float32Array(nLV);
+  var lFreq = new Float32Array(nLV);
+  var lFamily = new Float32Array(nLV);
+  var lDummy = new Float32Array(nLV * 3);
+  var lIndex = new Uint16Array(nLF * nLS * 2);
+  var li = 0, ii = 0;
+  for (f = 0; f < nLF; f++) {
+    var lLaneI = f % 7;
+    var lRing = Math.floor(f / 7);
+    for (s = 0; s < nLS; s++) {
+      lFamily[li] = 0;
+      lSeed[li] = rnd();
+      lPhase[li] = rnd() * TAU;
+      lEta[li] = lanes[lLaneI];
+      lPhi[li] = (lRing / Math.max(1, Math.ceil(nLF / 7))) * TAU;
+      lPsi[li] = (s / nLS) * TAU;
+      lLane[li] = lLaneI / 6;
+      lFreq[li] = 0.4 + (f % 3) * 0.2;
+      lIndex[ii++] = li;
+      lIndex[ii++] = f * nLS + ((s + 1) % nLS);
+      li++;
+    }
+  }
+  var geoL = new THREE.BufferGeometry();
+  geoL.setAttribute('position', new THREE.BufferAttribute(lDummy, 3));
+  geoL.setAttribute('aSeed', new THREE.BufferAttribute(lSeed, 1));
+  geoL.setAttribute('aPhase', new THREE.BufferAttribute(lPhase, 1));
+  geoL.setAttribute('aEta', new THREE.BufferAttribute(lEta, 1));
+  geoL.setAttribute('aPhi', new THREE.BufferAttribute(lPhi, 1));
+  geoL.setAttribute('aPsi', new THREE.BufferAttribute(lPsi, 1));
+  geoL.setAttribute('aLane', new THREE.BufferAttribute(lLane, 1));
+  geoL.setAttribute('aFreq', new THREE.BufferAttribute(lFreq, 1));
+  geoL.setAttribute('aFamily', new THREE.BufferAttribute(lFamily, 1));
+  geoL.setIndex(new THREE.BufferAttribute(lIndex, 1));
+  geoL.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 140);
+  scene.add(new THREE.LineSegments(geoL, matLine));
+
   var composer = new THREE.EffectComposer(renderer);
   composer.addPass(new THREE.RenderPass(scene, camera));
   var bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.34, 0.52, 0.48);
@@ -299,8 +371,8 @@ canvas{display:block;width:100%;height:100%}
   var KEYS = [
     { t: 0,  p: [6.6, 1.6, 10.8],  l: [0.0, 0.15, 0.2], fov: 46 },
     { t: 8,  p: [9.4, 2.8, 12.6],   l: [0.0, 0.2, 0.0],  fov: 40 },
-    { t: 17, p: [15.2, 6.4, 3.4],   l: [0.0, 0.1, 0.0],  fov: 35 },
-    { t: 27, p: [1.2, 0.55, -3.8],  l: [2.4, 0.15, 2.2], fov: 58 },
+    { t: 17, p: [1.1, 3.2, 15.6],   l: [0.0, 0.0, 0.0],  fov: 34 },
+    { t: 27, p: [0.2, 0.35, 2.4],   l: [0.1, 0.15, -7.5], fov: 62 },
     { t: 37, p: [-11.5, 8.2, 15.5], l: [0.0, 0.0, 0.0],  fov: 34 },
     { t: 50, p: [3.8, 21.5, 31.0],  l: [0.0, -1.6, 0.0], fov: 30 }
   ];
@@ -712,7 +784,7 @@ canvas{display:block;width:100%;height:100%}
       var hp = hopfJS(eta, phi, psi, 7.5);
       var px = hp.x * cr - hp.z * sr;
       var pz = hp.x * sr + hp.z * cr;
-      var str = 0.32 + 0.18 * Math.sin(t * 0.23 + i * 2.1) + thought[i] * 0.85;
+      var str = 0.22 + 0.14 * Math.sin(t * 0.23 + i * 2.1) + thought[i] * 0.95;
       lenses[i].set(px, hp.y, pz, str);
     }
     for (i = 0; i < wells.length; i++) {
@@ -722,9 +794,9 @@ canvas{display:block;width:100%;height:100%}
         w.fold = damp(w.fold, 1, 2.1, dt);
         w.s = damp(w.s, 0.55 + w.fold * 1.25, 3.2, dt);
       } else {
-        w.fold = damp(w.fold, 0, 0.55, dt);
-        w.s = damp(w.s, w.residual, 0.7, dt);
-        w.residual = damp(w.residual, 0.16, 0.015, dt);
+        w.fold = damp(w.fold, 0.2, 0.42, dt);
+        w.s = damp(w.s, Math.max(w.residual, 0.24), 0.52, dt);
+        w.residual = damp(w.residual, 0.2, 0.007, dt);
       }
       lenses[3 + i].set(w.pos.x, w.pos.y, w.pos.z, w.s);
     }
